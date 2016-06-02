@@ -1,0 +1,1607 @@
+using System;
+using System.Collections.Generic;
+using System.ComponentModel;
+using System.Data;
+using System.Drawing;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using System.Windows.Forms;
+using System.Drawing.Drawing2D;
+using System.IO;
+
+namespace WindowsFormsApplication7
+{
+    public partial class 自动泊车程序 : Form
+    {
+        /*声明一些bool类型的变量，用于判断程序中一些控件的状态*/
+
+        static bool isBreakDown = false;            //用于区别刹车与未刹车的状态
+
+        static TimeSpan timeBegan;                  //用于计算泊车过程的耗时
+        static TimeSpan timeEnd;
+
+        static int text1=50, text2=350;             //存储两个文本框中X,Y坐标上一次重置前的值
+
+        static bool zhunBei = false;                //判断确定按钮是否按下。
+
+        static bool began = false;                  //用于判断泊车是否开始
+
+        static bool text1change = false;
+        static bool text2change = false;             //判断文本框内容是否改变
+
+        static int NUM=0;                           //用于记录改变方向的次数
+
+        static float X4,X40,Y4,Y40,R;                           //声明全局变量mn代表小车左上角的坐标（m，n）用于函数之间的传递
+
+        /*设置textBox1和textBox2里字符串的默认值*/
+
+        public 自动泊车程序()
+        {
+            InitializeComponent();
+            textBox1.Text = "50";                    //赋小车初始位置X,Y坐标的默认值为（50，350）
+            textBox2.Text = "350";
+        }
+
+                         /*开始泊车按钮*/
+
+        private void button1_Click(object sender, EventArgs e)      
+        {
+            if (isBreakDown == false)                   //检查程序是否处于刹车状态
+            {
+                if (zhunBei == true&text1change==false&text2change==false&began==false)     //判断确定按钮是否按下，textBox1和textBox2中字符串的内容是否改变
+                {
+                        began = true;                   //将“泊车是否开始”的状态改变为“是”
+                        txt_huiZhi1();      //调用文件输出函数1，在D盘的根目录下生成“数据输出.txt”
+                        timeBegan = new TimeSpan(DateTime.Now.Ticks);       //把当前时间记录为泊车开始的时间。
+
+                        int x4, y4;                                     //声明x4,y4，（x4,y4）代表小车左上角的坐标
+                        x4 = (int)Convert.ToInt16(textBox1.Text);
+                        y4 = (int)Convert.ToInt16(textBox2.Text);       //将文本框的内容转变为int类型，并赋值给变量x4,y4
+
+                        int a = 0, r;                                   //a用来表示数据输出的次数（车中心点每移动20单位输出一次），r用来表示小车的转弯半径。
+                        
+                        float x1 = x4 + 300, x2 = x4 + 300, x3 = x4;
+                        float y1 = y4, y2 = y4 + 150, y3 = y4 + 150;    //声明小车其他三个顶点的坐标并赋值。
+
+                        float x11 = (x1 + x3) / 2, x12, y11 = (y1 + y2) / 2, y12;       //声明变量x11，x12，y11，y12，用于计算小车中心点移动的距离。
+                                        
+                        float ja, jb;                                   //ja用来表示小车行驶方向与水平方向的夹角，jb用来表示小车前轮的偏转角度。
+                 
+                       /*下边为实现自动泊车的代码，代码根据小车初始坐标的不同，应用不同的算法去实现泊车*/
+
+                        if (340 <= y4 & y4 < 360)       
+                        {
+                            tiaoZheng(x4, y4);
+                            daoChe(X4, Y4,R);
+                        }                                   //当小车初始的Y坐标结余340到360之间时，直接调用函数“tiaoZheng（）”和“daoChe”
+
+                         /*当小车的初始Y坐标结余359到370之间时，执行下段代码*/
+                        else if (359 < y4 & y4 < 370)      
+                        {
+                            r = 550;                        //将小车的转弯半径设置为550（最小转弯半径为300）
+                            while (x4 > 690)                //此处while循环用于将X坐标调整到690
+                            {
+                                x1 = x1 - 1;
+                                x2 = x2 - 1;
+                                x3 = x3 - 1;
+                                x4 = x4 - 1;
+                                drawCar(x4, y4);            //调用函数绘制该位置的小车
+                                yanShi(20);                 //调解调用小车绘制函数与擦除函数的延时时间
+                                caChu(x4, y4);              //调用函数擦除该位置的小车
+
+                                /*此块代码用于实现车中心点每移动20单位，程序就向D盘“数据输出.txt”文档里写入相应的数据*/
+                                x12 = (x1 + x3) / 2; y12 = (y1 + y2) / 2;       
+                                if ((x12 - x11) * (x12 - x11) > 400)        //判断条件为：中心位置偏移了20个单位
+                                {
+                                    a++;                                    //输出一次数据，a自加1（a用来代表数据输出的次数）
+                                    ja = (float)Math.Asin((y1 - y4) / 300); //计算小车行驶方向与水平方向的偏移角度
+                                    jb = 0;                                 //设置车前轮偏转角度为0°（因为此块代码是控制小车直线行驶）
+                                    txt_huiZhi2(a, x1, x2, x3, x4, y1, y2, y3, y4, ja, jb);     //调用文件输出函数2，向D盘的输出文件里写入数据（小车四个角的坐标，小车行驶方向与水平位置的夹角，小车前轮偏转的角度）
+                                    x11 = x12; y11 = y12;
+                                }
+                            }
+
+                            while (x4 < 690)            //此处的while循环也用于将小车的X坐标调整到690
+                            {
+                                x1 = x1 + 1;
+                                x2 = x2 + 1;
+                                x3 = x3 + 1;
+                                x4 = x4 + 1;
+                                drawCar(x4, y4);
+                                yanShi(20);
+                                caChu(x4, y4);
+
+                         /*此块代码用于实现车中心点每移动20单位，程序就向D盘“数据输出.txt”文档里写入相应的数据*/
+                                x12 = (x1 + x3) / 2; y12 = (y1 + y2) / 2;      
+                                if ((x12 - x11) * (x12 - x11) > 400)
+                                {
+                                    a++;
+                                    ja = (float)Math.Asin((y1 - y4) / 300);
+                                    jb = 0;
+                                    txt_huiZhi2(a, x1, x2, x3, x4, y1, y2, y3, y4, ja, jb);
+                                    x11 = x12; y11 = y12;
+                                }
+                            }
+                            zhiXing1(x4, y4, r);        //调用直行函数，将小车的位置调整到可以直接用“tiaoZheng（）”停进目标位置的位置
+                            tiaoZheng(X40, Y40);            //调用tiaoZheng()，完成泊车。
+                            daoChe(X4, Y4, R);
+                        }
+                            /*当初始的Y坐标介于369和380之间时，执行下段代码*/
+                        else if (369 < y4 & y4 < 380)
+                        {
+                            r = 650;
+                            while (x4 > 690)
+                            {
+                                x1 = x1 - 1;
+                                x2 = x2 - 1;
+                                x3 = x3 - 1;
+                                x4 = x4 - 1;
+                                drawCar(x4, y4);
+                                yanShi(20);
+                                caChu(x4, y4);
+
+                                x12 = (x1 + x3) / 2; y12 = (y1 + y2) / 2;       //输出动态数据
+                                if ((x12 - x11) * (x12 - x11) > 400)
+                                {
+                                    a++;
+                                    ja = (float)Math.Asin((y1 - y4) / 300);
+                                    jb = 0;
+                                    txt_huiZhi2(a, x1, x2, x3, x4, y1, y2, y3, y4, ja, jb);
+                                    x11 = x12; y11 = y12;
+                                }
+                            }
+
+                            while (x4 < 690)
+                            {
+                                x1 = x1 + 1;
+                                x2 = x2 + 1;
+                                x3 = x3 + 1;
+                                x4 = x4 + 1;
+                                drawCar(x4, y4);
+                                yanShi(20);
+                                caChu(x4, y4);
+
+                                x12 = (x1 + x3) / 2; y12 = (y1 + y2) / 2;
+                                if ((x12 - x11) * (x12 - x11) > 400)
+                                {
+                                    a++;
+                                    ja = (float)Math.Asin((y1 - y4) / 300);
+                                    jb = 0;
+                                    txt_huiZhi2(a, x1, x2, x3, x4, y1, y2, y3, y4, ja, jb);
+                                    x11 = x12; y11 = y12;
+                                }
+                            }
+                            zhiXing1(x4, y4, r);
+                            tiaoZheng(X40, Y40);
+                            daoChe(X4, Y4, R);
+                        }
+
+                            /*当初始的Y坐标介于379与390之间时，执行以下代码*/
+                        else if (379 < y4 & y4 < 390)
+                        {
+                            r = 1000;
+                            while (x4 > 850)
+                            {
+                                x1 = x1 - 1;
+                                x2 = x2 - 1;
+                                x3 = x3 - 1;
+                                x4 = x4 - 1;
+                                drawCar(x4, y4);
+                                yanShi(20);
+                                caChu(x4, y4);
+
+                                x12 = (x1 + x3) / 2; y12 = (y1 + y2) / 2;       //输出动态数据
+                                if ((x12 - x11) * (x12 - x11) > 400)
+                                {
+                                    a++;
+                                    ja = (float)Math.Asin((y1 - y4) / 300);
+                                    jb = 0;
+                                    txt_huiZhi2(a, x1, x2, x3, x4, y1, y2, y3, y4, ja, jb);
+                                    x11 = x12; y11 = y12;
+                                }
+                            }
+
+                            while (x4 < 850)
+                            {
+                                x1 = x1 + 1;
+                                x2 = x2 + 1;
+                                x3 = x3 + 1;
+                                x4 = x4 + 1;
+                                drawCar(x4, y4);
+                                yanShi(20);
+                                caChu(x4, y4);
+
+                                x12 = (x1 + x3) / 2; y12 = (y1 + y2) / 2;
+                                if ((x12 - x11) * (x12 - x11) > 400)
+                                {
+                                    a++;
+                                    ja = (float)Math.Asin((y1 - y4) / 300);
+                                    jb = 0;
+                                    txt_huiZhi2(a, x1, x2, x3, x4, y1, y2, y3, y4, ja, jb);
+                                    x11 = x12; y11 = y12;
+                                }
+                            }
+                            zhiXing1(x4, y4, r);
+                            tiaoZheng(X40, Y40);
+                            daoChe(X4, Y4, R);
+                        }
+                            /*当初始的Y坐标介于389到400之间时，执行以下代码*/
+                        else if (389 < y4 & y4 < 400)
+                        {
+                            r = 380;
+                            while (x4 > 730)
+                            {
+                                x1 = x1 - 1;
+                                x2 = x2 - 1;
+                                x3 = x3 - 1;
+                                x4 = x4 - 1;
+                                drawCar(x4, y4);
+                                yanShi(20);
+                                caChu(x4, y4);
+
+                                x12 = (x1 + x3) / 2; y12 = (y1 + y2) / 2;       //输出动态数据
+                                if ((x12 - x11) * (x12 - x11) > 400)
+                                {
+                                    a++;
+                                    ja = (float)Math.Asin((y1 - y4) / 300);
+                                    jb = 0;
+                                    txt_huiZhi2(a, x1, x2, x3, x4, y1, y2, y3, y4, ja, jb);
+                                    x11 = x12; y11 = y12;
+                                }
+                            }
+
+                            while (x4 < 730)
+                            {
+                                x1 = x1 + 1;
+                                x2 = x2 + 1;
+                                x3 = x3 + 1;
+                                x4 = x4 + 1;
+                                drawCar(x4, y4);
+                                yanShi(20);
+                                caChu(x4, y4);
+
+                                x12 = (x1 + x3) / 2; y12 = (y1 + y2) / 2;
+                                if ((x12 - x11) * (x12 - x11) > 400)
+                                {
+                                    a++;
+                                    ja = (float)Math.Asin((y1 - y4) / 300);
+                                    jb = 0;
+                                    txt_huiZhi2(a, x1, x2, x3, x4, y1, y2, y3, y4, ja, jb);
+                                    x11 = x12; y11 = y12;
+                                }
+                            }
+                            zhiXing2(x4, y4, r);
+                            tiaoZheng(X40, Y40);
+                            daoChe(X4, Y4, R);
+                        }
+                            /*当初始的Y坐标介于399到410之间时，执行以下代码*/
+                        else if (399 < y4 & y4 < 410)
+                        {
+                            r = 430;
+                            while (x4 > 800)
+                            {
+                                x1 = x1 - 1;
+                                x2 = x2 - 1;
+                                x3 = x3 - 1;
+                                x4 = x4 - 1;
+                                drawCar(x4, y4);
+                                yanShi(20);
+                                caChu(x4, y4);
+
+                                x12 = (x1 + x3) / 2; y12 = (y1 + y2) / 2;       //输出动态数据
+                                if ((x12 - x11) * (x12 - x11) > 400)
+                                {
+                                    a++;
+                                    ja = (float)Math.Asin((y1 - y4) / 300);
+                                    jb = 0;
+                                    txt_huiZhi2(a, x1, x2, x3, x4, y1, y2, y3, y4, ja, jb);
+                                    x11 = x12; y11 = y12;
+                                }
+                            }
+
+                            while (x4 < 800)
+                            {
+                                x1 = x1 + 1;
+                                x2 = x2 + 1;
+                                x3 = x3 + 1;
+                                x4 = x4 + 1;
+                                drawCar(x4, y4);
+                                yanShi(20);
+                                caChu(x4, y4);
+
+                                x12 = (x1 + x3) / 2; y12 = (y1 + y2) / 2;
+                                if ((x12 - x11) * (x12 - x11) > 400)
+                                {
+                                    a++;
+                                    ja = (float)Math.Asin((y1 - y4) / 300);
+                                    jb = 0;
+                                    txt_huiZhi2(a, x1, x2, x3, x4, y1, y2, y3, y4, ja, jb);
+                                    x11 = x12; y11 = y12;
+                                }
+                            }
+                            zhiXing2(x4, y4, r);
+                            tiaoZheng(X40, Y40);
+                            daoChe(X4, Y4, R);
+                        }
+                            /*当初始的Y坐标介于409到420之间时，执行以下代码*/
+                        else if (409 < y4 & y4 < 420)
+                        {
+                            r = 500;
+                            while (x4 > 800)
+                            {
+                                x1 = x1 - 1;
+                                x2 = x2 - 1;
+                                x3 = x3 - 1;
+                                x4 = x4 - 1;
+                                drawCar(x4, y4);
+                                yanShi(20);
+                                caChu(x4, y4);
+
+                                x12 = (x1 + x3) / 2; y12 = (y1 + y2) / 2;       //输出动态数据
+                                if ((x12 - x11) * (x12 - x11) > 400)
+                                {
+                                    a++;
+                                    ja = (float)Math.Asin((y1 - y4) / 300);
+                                    jb = 0;
+                                    txt_huiZhi2(a, x1, x2, x3, x4, y1, y2, y3, y4, ja, jb);
+                                    x11 = x12; y11 = y12;
+                                }
+                            }
+
+                            while (x4 < 800)
+                            {
+                                x1 = x1 + 1;
+                                x2 = x2 + 1;
+                                x3 = x3 + 1;
+                                x4 = x4 + 1;
+                                drawCar(x4, y4);
+                                yanShi(20);
+                                caChu(x4, y4);
+
+                                x12 = (x1 + x3) / 2; y12 = (y1 + y2) / 2;
+                                if ((x12 - x11) * (x12 - x11) > 400)
+                                {
+                                    a++;
+                                    ja = (float)Math.Asin((y1 - y4) / 300);
+                                    jb = 0;
+                                    txt_huiZhi2(a, x1, x2, x3, x4, y1, y2, y3, y4, ja, jb);
+                                    x11 = x12; y11 = y12;
+                                }
+                            }
+                            zhiXing2(x4, y4, r);
+                            tiaoZheng(X40, Y40);
+                            daoChe(X4, Y4, R);
+                        }
+                            /*当初始的Y坐标介于419和430之间时，执行以下代码*/
+                        else if (419 < y4 & y4 < 430)
+                        {
+                            r = 560;
+                            while (x4 > 880)
+                            {
+                                x1 = x1 - 1;
+                                x2 = x2 - 1;
+                                x3 = x3 - 1;
+                                x4 = x4 - 1;
+                                drawCar(x4, y4);
+                                yanShi(20);
+                                caChu(x4, y4);
+
+                                x12 = (x1 + x3) / 2; y12 = (y1 + y2) / 2;       //输出动态数据
+                                if ((x12 - x11) * (x12 - x11) > 400)
+                                {
+                                    a++;
+                                    ja = (float)Math.Asin((y1 - y4) / 300);
+                                    jb = 0;
+                                    txt_huiZhi2(a, x1, x2, x3, x4, y1, y2, y3, y4, ja, jb);
+                                    x11 = x12; y11 = y12;
+                                }
+                            }
+
+                            while (x4 < 880)
+                            {
+                                x1 = x1 + 1;
+                                x2 = x2 + 1;
+                                x3 = x3 + 1;
+                                x4 = x4 + 1;
+                                drawCar(x4, y4);
+                                yanShi(20);
+                                caChu(x4, y4);
+
+                                x12 = (x1 + x3) / 2; y12 = (y1 + y2) / 2;
+                                if ((x12 - x11) * (x12 - x11) > 400)
+                                {
+                                    a++;
+                                    ja = (float)Math.Asin((y1 - y4) / 300);
+                                    jb = 0;
+                                    txt_huiZhi2(a, x1, x2, x3, x4, y1, y2, y3, y4, ja, jb);
+                                    x11 = x12; y11 = y12;
+                                }
+                            }
+                            zhiXing2(x4, y4, r);
+                            tiaoZheng(X40, Y40);
+                            daoChe(X4, Y4, R);
+                        }
+                            /*当初始的Y坐标介于429和440之间时，执行以下代码*/
+                        else if (429 < y4 & y4 < 440)
+                        {
+                            r = 700;
+                            while (x4 > 930)
+                            {
+                                x1 = x1 - 1;
+                                x2 = x2 - 1;
+                                x3 = x3 - 1;
+                                x4 = x4 - 1;
+                                drawCar(x4, y4);
+                                yanShi(20);
+                                caChu(x4, y4);
+
+                                x12 = (x1 + x3) / 2; y12 = (y1 + y2) / 2;       //输出动态数据
+                                if ((x12 - x11) * (x12 - x11) > 400)
+                                {
+                                    a++;
+                                    ja = (float)Math.Asin((y1 - y4) / 300);
+                                    jb = 0;
+                                    txt_huiZhi2(a, x1, x2, x3, x4, y1, y2, y3, y4, ja, jb);
+                                    x11 = x12; y11 = y12;
+                                }
+                            }
+
+                            while (x4 < 930)
+                            {
+                                x1 = x1 + 1;
+                                x2 = x2 + 1;
+                                x3 = x3 + 1;
+                                x4 = x4 + 1;
+                                drawCar(x4, y4);
+                                yanShi(20);
+                                caChu(x4, y4);
+
+                                x12 = (x1 + x3) / 2; y12 = (y1 + y2) / 2;
+                                if ((x12 - x11) * (x12 - x11) > 400)
+                                {
+                                    a++;
+                                    ja = (float)Math.Asin((y1 - y4) / 300);
+                                    jb = 0;
+                                    txt_huiZhi2(a, x1, x2, x3, x4, y1, y2, y3, y4, ja, jb);
+                                    x11 = x12; y11 = y12;
+                                }
+                            }
+                            zhiXing2(x4, y4, r);
+                            tiaoZheng(X40, Y40);
+                            daoChe(X4, Y4, R);
+                        }
+                            /*当初始的Y坐标介于439与450之间时，执行以下代码*/
+                        else if (439 < y4 & y4 < 450)
+                        {
+                            r = 750;
+                            while (x4 > 960)
+                            {
+                                x1 = x1 - 1;
+                                x2 = x2 - 1;
+                                x3 = x3 - 1;
+                                x4 = x4 - 1;
+                                drawCar(x4, y4);
+                                yanShi(20);
+                                caChu(x4, y4);
+
+                                x12 = (x1 + x3) / 2; y12 = (y1 + y2) / 2;       //输出动态数据
+                                if ((x12 - x11) * (x12 - x11) > 400)
+                                {
+                                    a++;
+                                    ja = (float)Math.Asin((y1 - y4) / 300);
+                                    jb = 0;
+                                    txt_huiZhi2(a, x1, x2, x3, x4, y1, y2, y3, y4, ja, jb);
+                                    x11 = x12; y11 = y12;
+                                }
+                            }
+
+                            while (x4 < 960)
+                            {
+                                x1 = x1 + 1;
+                                x2 = x2 + 1;
+                                x3 = x3 + 1;
+                                x4 = x4 + 1;
+                                drawCar(x4, y4);
+                                yanShi(20);
+                                caChu(x4, y4);
+
+                                x12 = (x1 + x3) / 2; y12 = (y1 + y2) / 2;
+                                if ((x12 - x11) * (x12 - x11) > 400)
+                                {
+                                    a++;
+                                    ja = (float)Math.Asin((y1 - y4) / 300);
+                                    jb = 0;
+                                    txt_huiZhi2(a, x1, x2, x3, x4, y1, y2, y3, y4, ja, jb);
+                                    x11 = x12; y11 = y12;
+                                }
+                            }
+                            zhiXing2(x4, y4, r);
+                            tiaoZheng(X40, Y40);
+                            daoChe(X4, Y4, R);
+                        }
+                            /*当初始的Y坐标介于449和460之间时，执行以下坐标*/
+                        else if (449 < y4 & y4 <= 460)
+                        {
+                            r = 800;
+                            while (x4 > 1000)
+                            {
+                                x1 = x1 - 1;
+                                x2 = x2 - 1;
+                                x3 = x3 - 1;
+                                x4 = x4 - 1;
+                                drawCar(x4, y4);
+                                yanShi(20);
+                                caChu(x4, y4);
+
+                                x12 = (x1 + x3) / 2; y12 = (y1 + y2) / 2;       //输出动态数据
+                                if ((x12 - x11) * (x12 - x11) > 400)
+                                {
+                                    a++;
+                                    ja = (float)Math.Asin((y1 - y4) / 300);
+                                    jb = 0;
+                                    txt_huiZhi2(a, x1, x2, x3, x4, y1, y2, y3, y4, ja, jb);
+                                    x11 = x12; y11 = y12;
+                                }
+                            }
+
+                            while (x4 < 1000)
+                            {
+                                x1 = x1 + 1;
+                                x2 = x2 + 1;
+                                x3 = x3 + 1;
+                                x4 = x4 + 1;
+                                drawCar(x4, y4);
+                                yanShi(20);
+                                caChu(x4, y4);
+
+                                x12 = (x1 + x3) / 2; y12 = (y1 + y2) / 2;
+                                if ((x12 - x11) * (x12 - x11) > 400)
+                                {
+                                    a++;
+                                    ja = (float)Math.Asin((y1 - y4) / 300);
+                                    jb = 0;
+                                    txt_huiZhi2(a, x1, x2, x3, x4, y1, y2, y3, y4, ja, jb);
+                                    x11 = x12; y11 = y12;
+                                }
+                            }
+                            zhiXing2(x4, y4, r);
+                            tiaoZheng(X40, Y40);
+                            daoChe(X4, Y4, R);
+                        }
+                    }
+                    else
+                    {
+                        if (zhunBei == false)       //如果“确定”按钮未按下时
+                        {
+                            MessageBox.Show("请先确定小车的初始坐标");
+                        }
+                        else if(text2change==true|text1change==true)        //如果textBox1或者textBox2的内容发生变化时
+                        {
+                            MessageBox.Show("初始坐标已改变，请先确定");
+                        }
+                    }
+                }
+                else                               //当程序处于“刹车”状态时
+                {
+                    MessageBox.Show("刹车状态下不能执行改操作");
+                }
+            }
+        /*声明绘制函数，用于绘制指定位置的小车（矩形小车）*/
+        private void huiZhi1(float x1, float x2, float x3, float x4,float x5,float x6,float x7,float x8, float y1, float y2, float y3, float y4,float y5,float y6,float y7,float y8)        //用于矩形小车的绘制
+        {
+            Graphics g = this.CreateGraphics();
+            Pen pen1 = new Pen(Color.Black, 3);
+            g.DrawLine(pen1, new PointF(x3, y3), new PointF(x4, y4));
+            g.DrawLine(pen1, new PointF(x1, y1), new PointF(x2, y2));
+            g.DrawLine(pen1, new PointF(x1, y1), new PointF(x4, y4));
+            g.DrawLine(pen1, new PointF(x2, y2), new PointF(x3, y3));
+            
+            if ((x1 > 890&y1<340) || y1 < 175)       //雷达红绿转换代码，车的位置超过安全距离后雷达的显示由绿变红。
+                g.FillEllipse(Brushes.Red, x1 - 5, y1 - 5, 10, 10);
+             else
+                g.FillEllipse(Brushes.Green, x1- 5, y1 - 5, 10, 10);
+           
+            if (x2 > 890&y2<340)
+                g.FillEllipse(Brushes.Red, x2 - 5, y2 - 5, 10, 10);
+            else
+                g.FillEllipse(Brushes.Green, x2 - 5, y2 - 5, 10, 10);
+            if ((x3 < 460 && y3 < 340) || (y3 < 175))
+                g.FillEllipse(Brushes.Red, x3 - 5, y3 - 5, 10, 10);
+            else
+                g.FillEllipse(Brushes.Green, x3 - 5, y3 - 5, 10, 10);
+            if (x4 < 460 && y4 < 340)
+                g.FillEllipse(Brushes.Red, x4 - 5, y4 - 5, 10, 10);
+            else
+                g.FillEllipse(Brushes.Green, x4 - 5, y4 - 5, 10, 10);
+            if (x5 > 890&y5<340)
+                g.FillEllipse(Brushes.Red, x5 - 5, y5 - 5, 10, 10);
+            else
+                g.FillEllipse(Brushes.Green, x5 - 5, y5 - 5, 10, 10);
+            if (x6 > 890&y5<340)
+                g.FillEllipse(Brushes.Red, x6 - 5, y6 - 5, 10, 10);
+            else
+                g.FillEllipse(Brushes.Green, x6 - 5, y6 - 5, 10, 10);
+            if (x7 < 460 && y7 < 340)
+                g.FillEllipse(Brushes.Red, x7- 5, y7 - 5, 10, 10);
+            else
+                g.FillEllipse(Brushes.Green, x7 - 5, y7 - 5, 10, 10);
+            if (x8 < 460 && y8 < 340)
+                g.FillEllipse(Brushes.Red, x8 - 5, y8 - 5, 10, 10);
+            else
+                g.FillEllipse(Brushes.Green, x8 - 5, y8 - 5, 10, 10);
+
+        }
+        /*声明绘制2函数，用于擦除指定位置的小车（矩形小车）*/
+        private void huiZhi2(float x1, float x2, float x3, float x4, float x5, float x6, float x7, float x8, float y1, float y2, float y3, float y4, float y5, float y6, float y7, float y8)        //擦去矩形小车
+        {
+            Graphics g = this.CreateGraphics();
+            Pen pen = new Pen(Color.Gray, 3);
+           
+            g.DrawLine(pen, new PointF(x3, y3), new PointF(x4, y4));
+            g.DrawLine(pen, new PointF(x1, y1), new PointF(x2, y2));
+            g.DrawLine(pen, new PointF(x1, y1), new PointF(x4, y4));
+            g.DrawLine(pen, new PointF(x2, y2), new PointF(x3, y3));
+            g.FillEllipse(Brushes.Gray, x1 - 5, y1 - 5, 10, 10);
+            g.FillEllipse(Brushes.Gray, x2 - 5, y2 - 5, 10, 10);
+            g.FillEllipse(Brushes.Gray, x3 - 5, y3 - 5, 10, 10);
+            g.FillEllipse(Brushes.Gray, x4 - 5, y4 - 5, 10, 10);
+            g.FillEllipse(Brushes.Gray, x5 - 5, y5 - 5, 10, 10);
+            g.FillEllipse(Brushes.Gray, x6 - 5, y6 - 5, 10, 10);
+            g.FillEllipse(Brushes.Gray, x7 - 5, y7 - 5, 10, 10);
+            g.FillEllipse(Brushes.Gray, x8- 5, y8- 5, 10, 10);
+        }
+        /*实现延时的代码*/
+        private void yanShi(int x)              
+        {
+            Application.DoEvents();
+            System.Threading.Thread.Sleep(x);
+            Application.DoEvents();
+            checkBreakDownStatus();
+        }
+        /*用于实现刹车的代码*/
+        private void checkBreakDownStatus()     
+        {
+            while (isBreakDown == true)
+            {
+                Application.DoEvents();
+            }
+        }
+
+        /*此块代码用于绘制整个程序的静态北京*/
+        private void Form1_Paint(object sender, PaintEventArgs e)       
+        {
+            Graphics g = e.Graphics;
+
+            SolidBrush brush3 = new SolidBrush(Color.White);
+            g.FillRectangle(brush3, 5, 5, 415, 145);        
+
+            SolidBrush brush2 = new SolidBrush(Color.Gray);
+            g.FillRectangle(brush2, 0, 165, 1366, 455);                 //绘制公路（灰色背景）
+
+            Pen pen5 = new Pen(Color.Blue,2);  
+            Pen pen1 = new Pen(Color.Black, 3);
+            Pen pen2 = new Pen(Color.Gray, 3);
+            Pen pen3 = new Pen(Color.White, 10);
+            Pen pen4 = new Pen(Color.White, 5);                         //定义画笔
+
+            g.DrawLine(pen5, new PointF(5, 5), new PointF(420, 5));
+            g.DrawLine(pen5, new PointF(5, 5), new PointF(5, 150));
+            g.DrawLine(pen5, new PointF(420, 5), new PointF(420, 150));
+            g.DrawLine(pen5, new PointF(5,150), new PointF(420, 150));
+
+
+            g.DrawLine(pen4, new PointF(460, 165), new PointF(460, 335));
+            g.DrawLine(pen4, new PointF(893, 165), new PointF(893, 335));
+            g.DrawLine(pen3, new PointF(0, 160), new PointF(1400, 160));    //绘制停车线（白线）
+            g.DrawLine(pen4, new Point(0, 620), new Point(1400, 620));
+
+            drawCar1(150, 180);
+            drawCar1(900, 180);          //绘制两个个静态小车
+        }
+
+        private void Form1_Load(object sender, EventArgs e)
+        {
+
+        }
+        /*此处用于实现复位按钮*/
+        private void button3_Click(object sender, EventArgs e)      
+        {
+            if (zhunBei == false&began==false)
+            {
+                caChu(525, 185);//用灰色画刷抹去末位置的小车
+                int x, y;
+                x = (int)Convert.ToInt16(textBox1.Text);
+                y = (int)Convert.ToInt16(textBox2.Text);
+
+                drawCar(text1, text2);   //画出初始位置的小车
+            }
+            else
+            {
+                MessageBox.Show("此按钮仅在泊车结束时可用");
+            }
+                
+        }
+        /*此处用于实现刹车按钮*/
+        private void button2_Click(object sender, EventArgs e)     
+        {
+            if (began == true)
+            {
+                string s = button2.Text;
+                if (s.Equals("刹车"))
+                {
+                    button2.Text = "继续";
+                    isBreakDown = true;
+
+                }
+                if (s.Equals("继续"))
+                {
+                    button2.Text = "刹车";
+                    isBreakDown = false;
+                }
+            }
+            else
+            {
+                MessageBox.Show("请先开始泊车");
+            }
+
+        }
+        /*此处用于实现刹车按钮*/
+        private void button5_Click(object sender, EventArgs e)      
+        {
+            if (text1change == true | text2change == true | zhunBei == true)
+            {
+                if (began == false)
+                {
+                    Graphics g = this.CreateGraphics();
+                    caChu(text1, text2);
+                    caChu(525, 185);
+                    textBox1.Text = "50";
+                    textBox2.Text = "350";
+                    zhunBei = false;
+                    text1change = false;
+                    text2change = false;
+                }
+                else
+                {
+                    MessageBox.Show("泊车过程中不可执行此操作");
+                }
+            }
+            else
+            {
+                MessageBox.Show("重置无效，默认值未发生改变");
+            }
+        }
+        /*此处用于实现确定按钮*/
+        private void button4_Click(object sender, EventArgs e)     
+        {
+            if (began == false)
+            {
+                if (isBreakDown == false)
+                {
+                    int x, y;
+                    x = (int)Convert.ToInt32(textBox1.Text);
+                    y = (int)Convert.ToInt32(textBox2.Text);
+                    if (x >= 0 & x <= 1000 & y >= 340 & y <= 460)
+                    {
+                        caChu(text1, text2);
+                        caChu(525, 185);//用灰色画刷抹去末位置的小车
+                        drawCar(x, y);
+                        text1 = x;
+                        text2 = y;
+                        zhunBei = true;
+                        text1change = false;
+                        text2change = false;
+                    }
+                    else
+                    {
+                        MessageBox.Show("输入的坐标不在规定范围之内，请重新输入。");
+                    }
+                }
+                else
+                {
+                    MessageBox.Show("刹车状态下不能执行该操作");
+                }
+            }
+            else
+            {
+                MessageBox.Show("泊车过程中不能执行该操作");
+            }
+        }
+        /*此处声明文件输出1函数，用于在D盘根目录下生成“数据输出.txt”*/
+        private void txt_huiZhi1()              
+        {
+            StreamWriter sw = new StreamWriter(@"D:\数据输出.txt");         
+            sw.WriteLine("小车停靠过程中的数据输出文件：");
+            sw.Close();
+        }
+        /* 声明文件输出函数2*/
+        private void txt_huiZhi2(int i,float x1,float x2,float x3,float x4,float y1,float y2,float y3,float y4,float ja,float jb)       
+        {
+            StreamWriter sw = new StreamWriter(@"D:\数据输出.txt",true);
+            sw.WriteLine("  第" + i + "次数据输出（车的中心每移动20单位的距离，输出一次数据）：");
+            sw.WriteLine("      四个角的坐标分别为：（"+x1+"，"+y1+"） （"+x2+"，"+y2+"）   （"+x3+"，"+y3+"） （"+x4+","+y4+"）");
+            sw.WriteLine("      此时车的行驶方向与水平方向的夹角为"+ja+"°");
+            sw.WriteLine("      此时车前轮的偏转角度为"+jb+"°");
+            sw.Close();
+        }
+        /*声明文件输出函数3*/
+        private void txt_huiZhi3(float d,int a)     
+        {
+            string timespan;
+            TimeSpan ts = timeEnd.Subtract(timeBegan).Duration();
+            timespan = ts.Hours.ToString() + "小时" + ts.Minutes.ToString() + "分钟" + ts.Seconds.ToString() + "秒";
+            StreamWriter sw = new StreamWriter(@"D:\数据输出.txt", true);
+            sw.WriteLine("本次泊车共调整方向"+a+"次");
+            sw.WriteLine("小车总共移动了" + d + "单位长度的距离");
+            sw.WriteLine("本次泊车总共耗时"+timespan);
+            sw.Close();
+        }
+        /*声明函数，当小车在前几次的函数调用之后到达合理位置时，调用此函数进入目标泊车位*/
+        private void daoChe(float x4, float y4, float r)     
+        { 
+            int i=0,i0=0,d=150,l=300;
+            float m,n,p,q,pi=3.1415926f,j,k;
+            float x0,x1,x2,x3,x5,x6,x7,x8;
+            float y0,y1,y2,y3,y5,y6,y7,y8;
+            float x11, x12, y11, y12;
+            x0 = x4 + 300; x1 = x4 + 300; x2 = x4 + 300; x3 = x4;
+            y0 = y4 + 75; y1 = y4; y2 = y4 + 150; y3 = y4 + 150;
+            x11 = (x1 + x3) / 2; y11 = (y1 + y2) / 2;
+            int a = 0;
+            float ja, jb,jl;
+            
+             while (i <= 45 )                             //第一次调整方向
+                {
+
+                    i0 = i++;
+                    m = (float)Math.Sin(i / 180.0 * pi);
+                    n = (float)Math.Cos(i / 180.0 * pi);
+                    p = (float)Math.Sin(i0 / 180.0 * pi);
+                    q = (float)Math.Cos(i0 / 180.0 * pi);
+                    x1 = x0 - (d / 2) * m;
+                    y1 = y0 - (d / 2) * n;
+                    x2 = x0 + (d / 2) * m;
+                    y2 = y0 + (d / 2) * n;
+                    x4 = x1 - l * n;
+                    y4 = y1 + l * m;
+                    x3 = x2 - l * n;
+                    y3 = y2 + l * m;
+                    x5 = x0 - 25 * m;
+                    y5 = y0 - 25 * n;
+                    x6 = x0 + 25 * m;
+                    y6 = y0 + 25 * n;
+                    x8 = x5 - l * n;
+                    y8 = y5 + l * m;
+                    x7 = x6 - l * n;
+                    y7 = y6 + l * m;
+                    x0 = x0 + r * (m - p);
+                    y0 = y0 + r * (n - q);      //算法
+                    huiZhi1(x1, x2, x3, x4,x5,x6,x7,x8, y1, y2, y3, y4,y5,y6,y7,y8);
+                    yanShi(70);
+                    huiZhi2(x1, x2, x3, x4,x5,x6,x7,x8,y1, y2, y3, y4,y5,y6,y7,y8);
+                    m = x4;
+                    n = y4;
+
+                    x12 = (x1 + x3) / 2; y12 = (y1 + y2) / 2;
+                    if ((x12 - x11) * (x12 - x11) + (y12 - y11) * (y12 - y11) > 400)
+                    {
+                        a++;
+                        ja = (float)Math.Asin((y1 - y4) / 300);
+                        jb = (float)Math.Atan(l / (r - d / 2));
+                        txt_huiZhi2(a,x1,x2,x3,x4,y1,y2,y3,y4,ja,jb);
+                        x11 = x12; y11 = y12;
+                    }
+                }
+                 NUM++;
+                 while (i < 75 )         //第二次调整方向 while (i < 75 && isNotKaoJinZhangAi() )   
+                {
+                    isNotKaoJinZhangAi();
+                    i0 = i++;
+                    m = (float)Math.Sin(i / 180.0 * pi);
+                    n = (float)Math.Cos(i / 180.0 * pi);
+                    p = (float)Math.Sin(i0 / 180.0 * pi);
+                    q = (float)Math.Cos(i0 / 180.0 * pi);
+
+                    j = (float)Math.Sin((90 - i) / 180.0 * pi);
+                    k = (float)Math.Cos((90 - i) / 180.0 * pi);
+
+                    x1 = x0 - (d / 2) * j;
+                    y1 = y0 - (d / 2) * k;
+                    x2 = x0 + (d / 2) * j;
+                    y2 = y0 + (d / 2) * k;
+                    x4 = x1 - l * k;
+                    y4 = y1 + l * j;
+                    x3 = x2 - l * k;
+                    y3 = y2 + l * j;
+                    x5 = x0 - 25 * j;
+                    y5 = y0 - 25 * k;
+                    x6 = x0 + 25 * j;
+                    y6 = y0 + 25 * k;
+                    x8 = x5 - l * k;
+                    y8 = y5 + l * j;
+                    x7 = x6 - l * k;
+                    y7 = y6 + l * j;
+                    x0 = x0 + r * (q - n);
+                    y0 = y0 - r * (m - p);      //算法
+                    huiZhi1(x1, x2, x3, x4, x5, x6, x7, x8, y1, y2, y3, y4, y5, y6, y7, y8);
+                    yanShi(70);
+                    huiZhi2(x1, x2, x3, x4, x5, x6, x7, x8, y1, y2, y3, y4, y5, y6, y7, y8);
+                    m = x4;
+                    n = y4;
+
+                    x12 = (x1 + x3) / 2; y12 = (y1 + y2) / 2;
+                    if ((x12 - x11) * (x12 - x11) + (y12 - y11) * (y12 - y11) > 400)
+                    {
+                        a++;
+                        ja = (float)Math.Asin((y1 - y4) / 300);
+                        jb = (float)Math.Atan(l / (r - d / 2));
+                        txt_huiZhi2(a, x1, x2, x3, x4, y1, y2, y3, y4, ja, jb);
+                        x11 = x12; y11 = y12;
+                    }
+                }
+                NUM++;
+                i = 255;            //第三次调整方向
+                while (i < 270 )
+                {
+
+                    i0 = i++;
+                    m = (float)Math.Sin(i / 180.0 * pi);
+                    n = (float)Math.Cos(i / 180.0 * pi);
+                    p = (float)Math.Sin(i0 / 180.0 * pi);
+                    q = (float)Math.Cos(i0 / 180.0 * pi);
+                    x1 = x0 + (d / 2) * n;
+                    y1 = y0 + (d / 2) * m;
+                    x2 = x0 - (d / 2) * n;
+                    y2 = y0 - (d / 2) * m;
+                    x4 = x1 + l * m;
+                    y4 = y1 - l * n;
+                    x3 = x2 + l * m;
+                    y3 = y2 - l * n;
+                    x5 = x0 - 25 * n;
+                    y5 = y0 - 25 * m;
+                    x6 = x0 + 25 * n;
+                    y6 = y0 + 25 * m;
+                    x8 = x5 + l * m;
+                    y8 = y5 - l * n;
+                    x7 = x6 + l * m;
+                    y7 = y6 - l * n;
+
+
+                    x0 = x0 + r * (q - n);
+                    y0 = y0 - r * (m - p);      //算法
+
+                    huiZhi1(x1, x2, x3, x4, x5, x6, x7, x8, y1, y2, y3, y4, y5, y6, y7, y8);
+                    yanShi(70);
+                    huiZhi2(x1, x2, x3, x4, x5, x6, x7, x8, y1, y2, y3, y4, y5, y6, y7, y8);
+                    m = x4;
+                    n = y4;
+
+                    x12 = (x1 + x3) / 2; y12 = (y1 + y2) / 2;
+                    if ((x12 - x11) * (x12 - x11) + (y12 - y11) * (y12 - y11) > 400)
+                    {
+                        a++;
+                        ja = (float)Math.Asin((y1 - y4) / 300);
+                        jb = (float)Math.Atan(l / (r - d / 2));
+                        txt_huiZhi2(a, x1, x2, x3, x4, y1, y2, y3, y4, ja, jb);
+                        x11 = x12; y11 = y12;
+                    }
+                }
+                NUM++;
+                while (x1 < 825)        //调整位置
+                {
+
+                    x1 = x1 + 1;
+                    x2 = x2 + 1;
+                    x3 = x3 + 1;
+                    x4 = x4 + 1;
+                    drawCar(x4, y4);
+                    yanShi(20);
+                    caChu(x4, y4);
+                    m = x4;
+                    n = y4;
+
+                    x12 = (x1 + x3) / 2; y12 = (y1 + y2) / 2;
+                    if ((x12 - x11) * (x12 - x11) > 400)
+                    {
+                        a++;
+                        ja = 0;
+                        jb = 0;
+                        txt_huiZhi2(a, x1, x2, x3, x4, y1, y2, y3, y4, ja, jb);
+                        x11 = x12; y11 = y12;
+                    }
+                }
+                while (x1 > 825)        //调整位置
+                {
+
+                    x1 = x1 - 1;
+                    x2 = x2 - 1;
+                    x3 = x3 - 1;
+                    x4 = x4 - 1;
+                    drawCar(x4, y4);
+                    yanShi(20);
+                    caChu(x4, y4);
+                    m = x4;
+                    n = y4;
+
+                    x12 = (x1 + x3) / 2; y12 = (y1 + y2) / 2;
+                    if ((x12 - x11) * (x12 - x11) > 400)
+                    {
+                        a++;
+                        ja = 0;
+                        jb = 0;
+                        txt_huiZhi2(a, x1, x2, x3, x4, y1, y2, y3, y4, ja, jb);
+                        x11 = x12; y11 = y12;
+                    }
+                }
+                drawCar(x4,y4);
+                timeEnd = new TimeSpan(DateTime.Now.Ticks);
+                MessageBox.Show("泊车成功！");       //提示泊车成功
+                jl = (float)Math.Sqrt((675 - (x1 + x3) / 2) * (675 - (x1 + x3) / 2) + (255 - (y1 + y2) / 2) * (255 - (y1 + y2) / 2));
+                txt_huiZhi3(jl,NUM);
+                began = false;
+                zhunBei = false;
+            }
+        public bool isNotKaoJinZhangAi()
+        {
+            return true;
+        }
+
+        /*声明drawCra函数，用于绘制小车（带雷达）*/
+        private void drawCar(float x, float y)      
+        {
+            Graphics g = this.CreateGraphics();
+            //string sCarImgPath = System.IO.Directory.GetCurrentDirectory();
+            Image car1Image = Image.FromFile( getLocalPath("\\res\\car.png"));
+            RectangleF weiZhi_Rect = new RectangleF(x, y, 300, 150);
+            g.DrawImage(car1Image, weiZhi_Rect);
+            g.FillEllipse(Brushes.Green, x + 30, y, 10, 10);
+            g.FillEllipse(Brushes.Green, x + 30, y + 135, 10, 10);
+            g.FillEllipse(Brushes.Green, x + 280, y, 10, 10);
+            g.FillEllipse(Brushes.Green, x + 280, y + 130, 10, 10);
+            g.FillEllipse(Brushes.Green, x - 5, y + 40, 10, 10);
+            g.FillEllipse(Brushes.Green, x - 5, y + 90, 10, 10);
+            g.FillEllipse(Brushes.Green, x + 298, y + 40, 10, 10);
+            g.FillEllipse(Brushes.Green, x + 298, y + 90, 10, 10);
+        }
+
+        private string getLocalPath(string s)
+        {
+            string sBasePath=System.IO.Directory.GetCurrentDirectory();
+            return sBasePath + "\\"+s;
+        }
+
+        /*声明drawCar1函数，用于绘制小车（不带雷达）*/
+        private void drawCar1(float x, float y)     
+        {
+            Graphics g = this.CreateGraphics();
+            Image car1Image = Image.FromFile("D://car.png");
+            RectangleF weiZhi_Rect = new RectangleF(x, y, 300, 150);
+            g.DrawImage(car1Image, weiZhi_Rect);
+        }
+        /*声明擦除函数，用于擦除指定位置的小车*/
+        private void caChu(float x, float y)       
+        {
+            Graphics g = this.CreateGraphics();
+            SolidBrush brush = new SolidBrush(Color.Gray);
+            g.FillRectangle(brush, x-9, y-9, 358, 168);
+        }
+
+        /*X坐标“+”按钮*/
+        private void button6_Click(object sender, EventArgs e)
+        {
+            if (began == false)
+            {
+                if ((int)Convert.ToInt16(textBox1.Text) < 1000)
+                {
+                    textBox1.Text = (string)Convert.ToString((int)Convert.ToInt16(textBox1.Text) + 50);
+                }
+                else
+                {
+                    textBox1.Text = "1000";
+                }
+            }
+        }
+
+        /*X坐标“-”按钮*/
+        private void button7_Click(object sender, EventArgs e)
+        {
+            if (began == false)
+            {
+                if ((int)Convert.ToInt16(textBox1.Text) > 0)
+                {
+                    textBox1.Text = (string)Convert.ToString((int)Convert.ToInt16(textBox1.Text) - 50);
+                }
+                else
+                {
+                    textBox1.Text = "0";
+                }
+            }
+        }
+
+        /*Y坐标+按钮*/
+        private void button9_Click(object sender, EventArgs e)
+        {
+            if (began == false)
+            {
+                if ((int)Convert.ToInt16(textBox2.Text) < 460)
+                {
+                    textBox2.Text = (string)Convert.ToString((int)Convert.ToInt16(textBox2.Text) + 10);
+                }
+                else
+                {
+                    textBox2.Text = "460";
+                }
+            }
+        }
+
+        /*Y坐标“-”按钮*/
+        private void button8_Click(object sender, EventArgs e)
+        {
+            if (began == false)
+            {
+                if ((int)Convert.ToInt16(textBox2.Text) > 340)
+                {
+                    textBox2.Text = (string)Convert.ToString((int)Convert.ToInt16(textBox2.Text) - 10);
+                }
+                else
+                {
+                    textBox2.Text = "340";
+                }
+            }
+        }
+
+        /*声明调整函数，用来调整小车位置*/
+        private void tiaoZheng(float x4, float y4)
+        {
+            float x0, x1, x2, x3;
+            float y0, y1, y2, y3;
+            float r;
+            float x11, x12, y11, y12;
+            float ja = 0, jb = 0;
+            int a = 0;
+
+            x0 = x4 + 300; x1 = x4 + 300; x2 = x4 + 300; x3 = x4;
+            y0 = y4 + 75; y1 = y4; y2 = y4 + 150; y3 = y4 + 150;
+            x11 = (x1 + x3) / 2; y11 = (y1 + y2) / 2;
+
+            if (340 <= y4 & y4 < 345)        //直线运动，用于调整水平位置
+            {
+                r = 300;
+                R = r;
+                while (x4 > 210)
+                {
+                    x1 = x1 - 5;
+                    x2 = x2 - 5;
+                    x3 = x3 - 5;
+                    x4 = x4 - 5;
+                    drawCar(x4, y4);
+                    yanShi(20);
+                    caChu(x4, y4);
+
+                    x12 = (x1 + x3) / 2; y12 = (y1 + y2) / 2;       //输出动态数据
+                    if ((x12 - x11) * (x12 - x11) > 400)
+                    {
+                        a++;
+                        txt_huiZhi2(a, x1, x2, x3, x4, y1, y2, y3, y4, ja, jb);
+                        x11 = x12; y11 = y12;
+                    }
+                }
+                X4 = x4; Y4 = y4;
+                while (x4 < 210)
+                {
+                    x1 = x1 + 5;
+                    x2 = x2 + 5;
+                    x3 = x3 + 5;
+                    x4 = x4 + 5;
+                    drawCar(x4, y4);
+                    yanShi(20);
+                    caChu(x4, y4);
+
+                    x12 = (x1 + x3) / 2; y12 = (y1 + y2) / 2;
+                    if ((x12 - x11) * (x12 - x11) > 400)
+                    {
+                        a++;
+                        txt_huiZhi2(a, x1, x2, x3, x4, y1, y2, y3, y4, ja, jb);
+                        x11 = x12; y11 = y12;
+                    }
+                }
+                   X4 = x4; Y4 = y4;
+            }
+            else if (344 < y4 & y4 < 350)
+            {
+                r = 309;
+                R = r;
+                while (x4 > 200)
+                {
+                    x1 = x1 - 5;
+                    x2 = x2 - 5;
+                    x3 = x3 - 5;
+                    x4 = x4 - 5;
+                    drawCar(x4, y4);
+                    yanShi(20);
+                    caChu(x4, y4);
+
+                    x12 = (x1 + x3) / 2; y12 = (y1 + y2) / 2;
+                    if ((x12 - x11) * (x12 - x11) > 400)
+                    {
+                        a++;
+                        txt_huiZhi2(a, x1, x2, x3, x4, y1, y2, y3, y4, ja, jb);
+                        x11 = x12; y11 = y12;
+                    }
+                }
+                X4 = x4; Y4 = y4;
+                while (x4 < 200)
+                {
+                    x1 = x1 + 5;
+                    x2 = x2 + 5;
+                    x3 = x3 + 5;
+                    x4 = x4 + 5;
+                    drawCar(x4, y4);
+                    yanShi(20);
+                    caChu(x4, y4);
+
+                    x12 = (x1 + x3) / 2; y12 = (y1 + y2) / 2;       //输出动态数据
+                    if ((x12 - x11) * (x12 - x11) > 400)
+                    {
+                        a++;
+                        txt_huiZhi2(a, x1, x2, x3, x4, y1, y2, y3, y4, ja, jb);
+                        x11 = x12; y11 = y12;
+                    }
+                }
+                X4 = x4; Y4 = y4;
+            }
+            else if (349 < y4 & y4 < 355)
+            {
+                r = 318;
+                R = r;
+                while (x4 > 190)
+                {
+                    x1 = x1 - 5;
+                    x2 = x2 - 5;
+                    x3 = x3 - 5;
+                    x4 = x4 - 5;
+                    drawCar(x4, y4);
+                    yanShi(20);
+                    caChu(x4, y4);
+
+                    x12 = (x1 + x3) / 2; y12 = (y1 + y2) / 2;       //输出动态数据
+                    if ((x12 - x11) * (x12 - x11) > 400)
+                    {
+                        a++;
+                        txt_huiZhi2(a, x1, x2, x3, x4, y1, y2, y3, y4, ja, jb);
+                        x11 = x12; y11 = y12;
+                    }
+                }
+                X4 = x4; Y4 = y4;
+                while (x4 < 190)
+                {
+                    x1 = x1 + 5;
+                    x2 = x2 + 5;
+                    x3 = x3 + 5;
+                    x4 = x4 + 5;
+                    drawCar(x4, y4);
+                    yanShi(20);
+                    caChu(x4, y4);
+
+                    x12 = (x1 + x3) / 2; y12 = (y1 + y2) / 2;       //输出动态数据
+                    if ((x12 - x11) * (x12 - x11) > 400)
+                    {
+                        a++;
+                        txt_huiZhi2(a, x1, x2, x3, x4, y1, y2, y3, y4, ja, jb);
+                        x11 = x12; y11 = y12;
+                    }
+                }
+                X4 = x4; Y4 = y4;
+            }
+            else if (354 < y4 & y4 < 360)
+            {
+                r = 327;
+                R = r;
+                while (x4 > 180)
+                {
+                    x1 = x1 - 5;
+                    x2 = x2 - 5;
+                    x3 = x3 - 5;
+                    x4 = x4 - 5;
+                    drawCar(x4, y4);
+                    yanShi(20);
+                    caChu(x4, y4);
+
+                    x12 = (x1 + x3) / 2; y12 = (y1 + y2) / 2;       //输出动态数据
+                    if ((x12 - x11) * (x12 - x11) > 400)
+                    {
+                        a++;
+                        txt_huiZhi2(a, x1, x2, x3, x4, y1, y2, y3, y4, ja, jb);
+                        x11 = x12; y11 = y12;
+                    }
+                }
+                X4 = x4; Y4 = y4;
+                while (x4 < 180)
+                {
+                    x1 = x1 + 5;
+                    x2 = x2 + 5;
+                    x3 = x3 + 5;
+                    x4 = x4 + 5;
+                    drawCar(x4, y4);
+                    yanShi(20);
+                    caChu(x4, y4);
+
+                    x12 = (x1 + x3) / 2; y12 = (y1 + y2) / 2;       //输出动态数据
+                    if ((x12 - x11) * (x12 - x11) > 400)
+                    {
+                        a++;
+                        txt_huiZhi2(a, x1, x2, x3, x4, y1, y2, y3, y4, ja, jb);
+                        x11 = x12; y11 = y12;
+                    }
+                }
+                X4 = x4; Y4 = y4;
+            }
+            else if (359 < y4 & y4 < 360)
+            {
+                r = 336;
+                R = r;
+                while (x4 > 170)
+                {
+                    x1 = x1 - 5;
+                    x2 = x2 - 5;
+                    x3 = x3 - 5;
+                    x4 = x4 - 5;
+                    drawCar(x4, y4);
+                    yanShi(20);
+                    caChu(x4, y4);
+
+                    x12 = (x1 + x3) / 2; y12 = (y1 + y2) / 2;       //输出动态数据
+                    if ((x12 - x11) * (x12 - x11) > 400)
+                    {
+                        a++;
+                        txt_huiZhi2(a, x1, x2, x3, x4, y1, y2, y3, y4, ja, jb);
+                        x11 = x12; y11 = y12;
+                    }
+                }
+                X4 = x4; Y4 = y4;
+                while (x4 < 170)
+                {
+                    x1 = x1 + 5;
+                    x2 = x2 + 5;
+                    x3 = x3 + 5;
+                    x4 = x4 + 5;
+                    drawCar(x4, y4);
+                    yanShi(20);
+                    caChu(x4, y4);
+
+                    x12 = (x1 + x3) / 2; y12 = (y1 + y2) / 2;       //输出动态数据
+                    if ((x12 - x11) * (x12 - x11) > 400)
+                    {
+                        a++;
+                        txt_huiZhi2(a, x1, x2, x3, x4, y1, y2, y3, y4, ja, jb);
+                        x11 = x12; y11 = y12;
+                    }
+                }
+                X4 = x4; Y4 = y4;
+            }
+        }
+
+        /*声明直行函数1*/
+        private void zhiXing1(float x4, float y4, float r)
+        {
+            caChu(x4,y4);
+            int i = 0, i0 = 0, d = 150, l = 300;
+            float m, n, p, q, pi = 3.1415926f;
+            float x0, x1, x2, x3, x5, x6, x7, x8;
+            float y0, y1, y2, y3, y5, y6, y7, y8;
+            float x11, x12, y11, y12;
+            x0 = x4 + 300; x1 = x4 + 300; x2 = x4 + 300; x3 = x4;
+            y0 = y4 + 75; y1 = y4; y2 = y4 + 150; y3 = y4 + 150;
+            x11 = (x1 + x3) / 2; y11 = (y1 + y2) / 2;
+            int a = 0;
+            float ja, jb;
+            i = 270;
+            while (i <= 280)                             //第一次调整方向
+            {
+                i0 = i++;
+                m = (float)Math.Sin(i / 180.0 * pi);
+                n = (float)Math.Cos(i / 180.0 * pi);
+                p = (float)Math.Sin(i0 / 180.0 * pi);
+                q = (float)Math.Cos(i0 / 180.0 * pi);
+                x1 = x0 + (d / 2) * n;
+                y1 = y0 + (d / 2) * m;
+                x2 = x0 - (d / 2) * n;
+                y2 = y0 - (d / 2) * m;
+                x4 = x1 + l * m;
+                y4 = y1 - l * n;
+                x3 = x2 + l * m;
+                y3 = y2 - l * n;
+                x5 = x0 - 25 * n;
+                y5 = y0 - 25 * m;
+                x6 = x0 + 25 * n;
+                y6 = y0 + 25 * m;
+                x8 = x5 + l * m;
+                y8 = y5 - l * n;
+                x7 = x6 + l * m;
+                y7 = y6 - l * n;
+                x0 = x0 + r * (q - n);
+                y0 = y0 - r * (m - p);      //算法
+                huiZhi1(x1, x2, x3, x4, x5, x6, x7, x8, y1, y2, y3, y4, y5, y6, y7, y8);
+                yanShi(70);
+                huiZhi2(x1, x2, x3, x4, x5, x6, x7, x8, y1, y2, y3, y4, y5, y6, y7, y8);
+
+                m = x4;
+                n = y4;
+
+                x12 = (x1 + x3) / 2; y12 = (y1 + y2) / 2;
+                if ((x12 - x11) * (x12 - x11) + (y12 - y11) * (y12 - y11) > 400)
+                {
+                    a++;
+                    ja = (float)Math.Asin((y1 - y4) / 300);
+                    jb = (float)Math.Atan(l / (r - d / 2));
+                    txt_huiZhi2(a, x1, x2, x3, x4, y1, y2, y3, y4, ja, jb);
+                    x11 = x12; y11 = y12;
+                }
+            }
+            NUM++;
+            i = 170;
+            while (i < 180)             //第二次调整方向
+            {
+                i0 = i++;
+                m = (float)Math.Sin(i / 180.0 * pi);
+                n = (float)Math.Cos(i / 180.0 * pi);
+                p = (float)Math.Sin(i0 / 180.0 * pi);
+                q = (float)Math.Cos(i0 / 180.0 * pi);
+                x1 = x0 +(d / 2) * m;
+                y1 = y0 +(d / 2) * n;
+                x2 = x0 - (d / 2) * m;
+                y2 = y0 - (d / 2) * n;
+                x4 = x1 + l * n;
+                y4 = y1 - l * m;
+                x3 = x2 + l * n;
+                y3 = y2 - l * m;
+                x5 = x0 - 25 * m;
+                y5 = y0 - 25 * n;
+                x6 = x0 + 25 * m;
+                y6 = y0 + 25 * n;
+                x8 = x5 + l * n;
+                y8 = y5 - l * m;
+                x7 = x6 + l * n;
+                y7 = y6 - l * m;
+                x0 = x0 + r * (m - p);
+                y0 = y0 + r * (n - q); 
+                huiZhi1(x1, x2, x3, x4, x5, x6, x7, x8, y1, y2, y3, y4, y5, y6, y7, y8);
+                yanShi(70);
+                huiZhi2(x1, x2, x3, x4, x5, x6, x7, x8, y1, y2, y3, y4, y5, y6, y7, y8);
+
+                m = x4;
+                n = y4;
+
+                x12 = (x1 + x3) / 2; y12 = (y1 + y2) / 2;
+                if ((x12 - x11) * (x12 - x11) + (y12 - y11) * (y12 - y11) > 400)
+                {
+                    a++;
+                    ja = (float)Math.Asin((y1 - y4) / 300);
+                    jb = (float)Math.Atan(l / (r - d / 2));
+                    txt_huiZhi2(a, x1, x2, x3, x4, y1, y2, y3, y4, ja, jb);
+                    x11 = x12; y11 = y12;
+                }
+            }
+
+            NUM++;
+            X40 = x4; Y40 = y4;
+        }
+
+        /*声明直行函数2*/
+        private void zhiXing2(float x4, float y4, float r)
+        {
+            caChu(x4, y4);
+            int i = 0, i0 = 0, d = 150, l = 300;
+            float m, n, p, q, pi = 3.1415926f;
+            float x0, x1, x2, x3, x5, x6, x7, x8;
+            float y0, y1, y2, y3, y5, y6, y7, y8;
+            float x11, x12, y11, y12;
+            x0 = x4 + 300; x1 = x4 + 300; x2 = x4 + 300; x3 = x4;
+            y0 = y4 + 75; y1 = y4; y2 = y4 + 150; y3 = y4 + 150;
+            x11 = (x1 + x3) / 2; y11 = (y1 + y2) / 2;
+            int a = 0;
+            float ja, jb;
+            i = 270;
+            while (i <= 290)                             //第一次调整方向
+            {
+                i0 = i++;
+                m = (float)Math.Sin(i / 180.0 * pi);
+                n = (float)Math.Cos(i / 180.0 * pi);
+                p = (float)Math.Sin(i0 / 180.0 * pi);
+                q = (float)Math.Cos(i0 / 180.0 * pi);
+                x1 = x0 + (d / 2) * n;
+                y1 = y0 + (d / 2) * m;
+                x2 = x0 - (d / 2) * n;
+                y2 = y0 - (d / 2) * m;
+                x4 = x1 + l * m;
+                y4 = y1 - l * n;
+                x3 = x2 + l * m;
+                y3 = y2 - l * n;
+                x5 = x0 - 25 * n;
+                y5 = y0 - 25 * m;
+                x6 = x0 + 25 * n;
+                y6 = y0 + 25 * m;
+                x8 = x5 + l * m;
+                y8 = y5 - l * n;
+                x7 = x6 + l * m;
+                y7 = y6 - l * n;
+                x0 = x0 + r * (q - n);
+                y0 = y0 - r * (m - p);      //算法
+                huiZhi1(x1, x2, x3, x4, x5, x6, x7, x8, y1, y2, y3, y4, y5, y6, y7, y8);
+                yanShi(70);
+                huiZhi2(x1, x2, x3, x4, x5, x6, x7, x8, y1, y2, y3, y4, y5, y6, y7, y8);
+
+                m = x4;
+                n = y4;
+
+                x12 = (x1 + x3) / 2; y12 = (y1 + y2) / 2;
+                if ((x12 - x11) * (x12 - x11) + (y12 - y11) * (y12 - y11) > 400)
+                {
+                    a++;
+                    ja = (float)Math.Asin((y1 - y4) / 300);
+                    jb = (float)Math.Atan(l / (r - d / 2));
+                    txt_huiZhi2(a, x1, x2, x3, x4, y1, y2, y3, y4, ja, jb);
+                    x11 = x12; y11 = y12;
+                }
+            }
+            NUM++;
+            i = 160;
+            while (i < 180)             //第二次调整方向
+            {
+                i0 = i++;
+                m = (float)Math.Sin(i / 180.0 * pi);
+                n = (float)Math.Cos(i / 180.0 * pi);
+                p = (float)Math.Sin(i0 / 180.0 * pi);
+                q = (float)Math.Cos(i0 / 180.0 * pi);
+                x1 = x0 + (d / 2) * m;
+                y1 = y0+(d / 2) * n;
+                x2 = x0 - (d / 2) * m;
+                y2 = y0 -(d / 2) * n;
+                x4 = x1 + l * n;
+                y4 = y1 - l * m;
+                x3 = x2 + l * n;
+                y3 = y2 - l * m;
+                x5 = x0 - 25 * m;
+                y5 = y0 - 25 * n;
+                x6 = x0 + 25 * m;
+                y6 = y0 + 25 * n;
+                x8 = x5 + l * n;
+                y8 = y5 - l * m;
+                x7 = x6 + l * n;
+                y7 = y6 - l * m;
+                x0 = x0 + r * (m - p);
+                y0 = y0 + r * (n - q);   
+                huiZhi1(x1, x2, x3, x4, x5, x6, x7, x8, y1, y2, y3, y4, y5, y6, y7, y8);
+                yanShi(70);
+                huiZhi2(x1, x2, x3, x4, x5, x6, x7, x8, y1, y2, y3, y4, y5, y6, y7, y8);
+
+                x12 = (x1 + x3) / 2; y12 = (y1 + y2) / 2;
+                if ((x12 - x11) * (x12 - x11) + (y12 - y11) * (y12 - y11) > 400)
+                {
+                    a++;
+                    ja = (float)Math.Asin((y1 - y4) / 300);
+                    jb = (float)Math.Atan(l / (r - d / 2));
+                    txt_huiZhi2(a, x1, x2, x3, x4, y1, y2, y3, y4, ja, jb);
+                    x11 = x12; y11 = y12;
+                    
+                }
+            }
+            NUM++;
+            X40 = x4; Y40 = y4;
+        }
+        /*判断textBox1的内容是否改变*/
+        private void textBox1_TextChanged(object sender, EventArgs e)
+        {
+            text1change = true;
+        }
+        /*判断textBox2的内容是否改变*/
+        private void textBox2_TextChanged(object sender, EventArgs e)
+        {
+            text2change = true;
+        }
+        }
+    }
+
+
+
